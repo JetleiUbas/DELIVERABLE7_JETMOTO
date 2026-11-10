@@ -1,5 +1,6 @@
 package ui;
 
+import dao.ActivityLogDao;
 import model.User;
 import java.util.Scanner;
 
@@ -8,6 +9,7 @@ public class DashboardMenu {
     private final Scanner scanner;
     private final User user;
     private final String role;
+    private final ActivityLogDao logDao = new ActivityLogDao();
 
     public DashboardMenu(Scanner scanner, User user) {
         this(scanner, user, user.roles());
@@ -39,9 +41,10 @@ public class DashboardMenu {
             System.out.println("2. Logout");
             System.out.print("Choose: ");
             switch (scanner.nextLine().trim()) {
-                case "1" -> new SearchPartsScreen(scanner).show();
+                case "1" -> new SearchPartsScreen(scanner, user.id()).show();
                 case "2" -> {
                     System.out.println("Logged out.");
+                    logDao.logAction(user.id(), "USER_LOGOUT", "User [" + user.id() + "] logged out");
                     loggedIn = false;
                 }
                 default -> System.out.println("Invalid choice. Try again.");

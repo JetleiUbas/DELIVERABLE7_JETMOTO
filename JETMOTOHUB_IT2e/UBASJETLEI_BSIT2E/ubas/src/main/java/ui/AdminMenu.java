@@ -1,6 +1,8 @@
 package ui;
 
+import dao.ActivityLogDao;
 import dao.UserDao;
+import model.ActivityLog;
 import model.User;
 
 import java.util.List;
@@ -11,6 +13,7 @@ public final class AdminMenu {
     private final Scanner scanner;
     private final UserDao userDao;
     private final User currentAdmin;
+    private final ActivityLogDao logDao = new ActivityLogDao();
 
     private static final String[] VALID_ROLES = {"ADMIN", "STAFF", "CUSTOMER"};
     private static final String[] VALID_STATUSES = {"APPROVED", "PENDING"};
@@ -30,7 +33,8 @@ public final class AdminMenu {
             System.out.println("3. Approve User Account");
             System.out.println("4. Update User");
             System.out.println("5. Search Parts Catalog");
-            System.out.println("6. Logout");
+            System.out.println("6. View System Audit Logs");
+            System.out.println("7. Logout");
             int choice = readIntInput("Choose an option (0 to cancel): ");
 
             switch (choice) {
@@ -39,9 +43,12 @@ public final class AdminMenu {
                 case 2 -> displayUsers(userDao.getPendingUsers());
                 case 3 -> approveAccount();
                 case 4 -> updateUser();
-                case 5 -> new SearchPartsScreen(scanner).show();
-                case 6 -> {
+                case 5 -> new SearchPartsScreen(scanner, currentAdmin.id()).show();
+                case 6 -> auditLogMenu();
+                case 7 -> {
                     System.out.println("Logged out.");
+                    logDao.logAction(currentAdmin.id(), "USER_LOGOUT",
+                            "Admin [" + currentAdmin.id() + "] logged out");
                     running = false;
                 }
                 default -> System.out.println("Invalid option. Try again.");
@@ -92,6 +99,9 @@ public final class AdminMenu {
         if (userDao.updateUserRoleAndStatus(targetUserId, newRole, newStatus)) {
             System.out.println("User ID " + targetUserId + " updated successfully. Role: "
                     + newRole + " | Status: " + newStatus);
+            logDao.logAction(currentAdmin.id(), "USER_UPDATED",
+                    "Admin [" + currentAdmin.id() + "] changed User " + targetUserId
+                            + " to role " + newRole + ", status " + newStatus);
         } else {
             System.out.println("User update failed.");
         }
@@ -161,9 +171,79 @@ public final class AdminMenu {
 
         if (userDao.approveUser(userId)) {
             System.out.println("User ID " + userId + " has been approved.");
+            logDao.logAction(currentAdmin.id(), "USER_APPROVED",
+                    "Admin [" + currentAdmin.id() + "] approved account for User ID " + userId);
         } else {
             System.out.println("Approval failed. The account may already have been updated.");
         }
+    }
+
+    /** Sub-menu for the activity_logs audit trail. */
+    private void auditLogMenu() {
+        boolean inAudit = true;
+        while (inAudit) {
+            System.out.println("\n===== SYSTEM AUDIT LOGS =====");
+            System.out.println("1. View All System Logs");
+            System.out.println("2. Filter Logs by User ID");
+            System.out.println("3. Clear All Logs");
+            System.out.println("0. Back");
+            int choice = readIntInput("Choose an option: ");
+
+            switch (choice) {
+                case 1 -> displayLogs(logDao.getAllLogs());
+                case 2 -> {
+                    int userId = readIntInput("Enter the User ID to filter (0 to cancel): ");
+                    if (userId == 0) {
+                        System.out.println("Filter cancelled.");
+                    } else {
+                        displayLogs(logDao.getLogsByUserId(userId));
+                    }
+                }
+                case 3 -> clearLogs();
+                case 0 -> inAudit = false;
+                default -> System.out.println("Invalid option. Try again.");
+            }
+        }
+    }
+
+    /** Asks for typed confirmation, wipes the history, then records who did it. */
+    private void clearLogs() {
+        System.out.println("WARNING: This permanently deletes ALL activity log history.");
+        System.out.print("Type YES to confirm (anything else cancels): ");
+        if (!"YES".equals(scanner.nextLine().trim())) {
+            System.out.println("Clear logs cancelled.");
+            return;
+        }
+        int removed = logDao.clearAllLogs();
+        if (removed < 0) {
+            System.out.println("Failed to clear logs.");
+            return;
+        }
+        System.out.println(removed + " log entr" + (removed == 1 ? "y" : "ies") + " deleted.");
+        // Leave a trace of the clear itself so the trail is never silently empty.
+        logDao.logAction(currentAdmin.id(), "LOGS_CLEARED",
+                "Admin [" + currentAdmin.id() + "] cleared " + removed + " log entries");
+    }
+
+    /** Renders log entries in the required aligned console table. */
+    private void displayLogs(List<ActivityLog> logs) {
+        if (logs.isEmpty()) {
+            System.out.println("No activity logs found.");
+            return;
+        }
+
+        String format = "%-5s | %-8s | %-18s | %-35s | %-20s%n";
+        String line = "-".repeat(5 + 3 + 8 + 3 + 18 + 3 + 35 + 3 + 20);
+        System.out.println(line);
+        System.out.printf(format, "ID", "USER ID", "ACTION TYPE", "DESCRIPTION", "TIMESTAMP");
+        System.out.println(line);
+        for (ActivityLog log : logs) {
+            System.out.printf(format,
+                    log.logId(), log.userId(),
+                    fit(log.actionType(), 18), fit(log.description(), 35), fit(log.timestamp(), 20));
+        }
+        System.out.println(line);
+        System.out.println(logs.size() + " log entr" + (logs.size() == 1 ? "y" : "ies") + " shown.");
     }
 
     /** Renders any user list using fixed-width columns for aligned console output. */
@@ -187,6 +267,7 @@ public final class AdminMenu {
 
     private String fit(String value, int width) {
         if (value == null) return "";
-        return value.length() <= width ? value : value.substring(0, width);
+        if (value.length() <= width) return value;
+        return width > 3 ? value.substring(0, width - 3) + "..." : value.substring(0, width);
     }
 }

@@ -1,5 +1,6 @@
 package ui;
 
+import dao.ActivityLogDao;
 import dao.PartDao;
 import model.Part;
 
@@ -10,9 +11,18 @@ public class SearchPartsScreen {
 
     private final Scanner scanner;
     private final PartDao partDao = new PartDao();
+    private final ActivityLogDao logDao = new ActivityLogDao();
+    private final int userId; // 0 = guest (not logged in), guests are not logged
 
+    /** Guest search from the main menu. */
     public SearchPartsScreen(Scanner scanner) {
+        this(scanner, 0);
+    }
+
+    /** Search by a logged-in user; the search is recorded in the audit trail. */
+    public SearchPartsScreen(Scanner scanner, int userId) {
         this.scanner = scanner;
+        this.userId = userId;
     }
 
     public void show() {
@@ -21,6 +31,11 @@ public class SearchPartsScreen {
         String keyword = scanner.nextLine().trim();
 
         List<Part> results = partDao.search(keyword);
+        if (userId > 0) {
+            String term = keyword.isEmpty() ? "all parts" : "'" + keyword + "'";
+            logDao.logAction(userId, "PART_SEARCHED",
+                    "User [" + userId + "] searched parts for " + term + " (" + results.size() + " found)");
+        }
         if (results.isEmpty()) {
             System.out.println("No parts found.");
             return;

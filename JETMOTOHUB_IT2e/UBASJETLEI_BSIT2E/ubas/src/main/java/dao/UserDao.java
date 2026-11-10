@@ -42,6 +42,21 @@ public class UserDao {
         }
     }
 
+    /** Returns the id of the user with this username, or -1 when not found. */
+    public int findIdByUsername(String username) {
+        String sql = "SELECT id FROM users WHERE username = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt("id") : -1;
+            }
+        } catch (SQLException e) {
+            System.out.println("Lookup failed: " + e.getMessage());
+            return -1;
+        }
+    }
+
     /** Returns every registered account, regardless of role or status. */
     public List<User> getAllUsers() {
         return findUsers("SELECT id, name, username, password, roles, status FROM users ORDER BY id");

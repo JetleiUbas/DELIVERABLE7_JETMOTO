@@ -31,10 +31,22 @@ public final class DatabaseInitializer {
                 )
                 """;
 
+        String logsSql = """
+                CREATE TABLE IF NOT EXISTS activity_logs (
+                    log_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id     INTEGER NOT NULL,
+                    action_type TEXT NOT NULL,
+                    description TEXT,
+                    timestamp   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+                """;
+
         try (Connection connection = DatabaseConnection.getConnection();
              Statement statement = connection.createStatement()) {
             statement.execute(usersSql);
             statement.execute(partsSql);
+            statement.execute(logsSql);
         } catch (SQLException e) {
             throw new IllegalStateException("Database initialization failed: " + e.getMessage(), e);
         }

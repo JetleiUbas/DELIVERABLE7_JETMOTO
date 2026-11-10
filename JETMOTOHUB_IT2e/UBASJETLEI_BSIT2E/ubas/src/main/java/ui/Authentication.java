@@ -1,5 +1,6 @@
 package ui;
 
+import dao.ActivityLogDao;
 import dao.UserDao;
 import model.User;
 
@@ -11,6 +12,7 @@ import java.util.Scanner;
 public final class Authentication {
     private final Scanner scanner;
     private final UserDao userDao;
+    private final ActivityLogDao logDao = new ActivityLogDao();
 
     public Authentication(Scanner scanner, UserDao userDao) {
         this.scanner = scanner;
@@ -72,6 +74,11 @@ public final class Authentication {
 
         if (userDao.register(name, username, password, role)) {
             System.out.println("Registered as " + role + ". Your status is PENDING.");
+            int newUserId = userDao.findIdByUsername(username);
+            if (newUserId > 0) {
+                logDao.logAction(newUserId, "USER_REGISTERED",
+                        "User [" + newUserId + "] registered as " + role + " (PENDING)");
+            }
         } else {
             System.out.println("Registration failed. Please try again.");
         }
@@ -105,6 +112,7 @@ public final class Authentication {
         }
 
         User user = result.get();
+        logDao.logAction(user.id(), "USER_LOGIN", "User [" + user.id() + "] logged in as " + user.roles());
         String role = user.roles() == null ? "" : user.roles().toUpperCase(Locale.ROOT);
         switch (role) {
             case "ADMIN" -> new AdminMenu(scanner, userDao, user).show();
